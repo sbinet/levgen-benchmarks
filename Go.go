@@ -3,8 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
-	"runtime/pprof"
 	"time"
 )
 
@@ -58,26 +56,30 @@ func CheckColl(x, y, w, h int, rs []Room) bool {
 	return false
 }
 
-func MakeRoom(rs []Room, ii int, gen *uint32) ([]Room, int) {
+func MakeRoom(rs []Room, gen *uint32) []Room {
 	x := GenRand(gen) % TileDim
 	y := GenRand(gen) % TileDim
 	w := GenRand(gen)%MaxWid + MinWid
 	h := GenRand(gen)%MaxWid + MinWid
 
 	if x+w >= TileDim || y+h >= TileDim || x == 0 || y == 0 {
-		return rs, ii
+		return rs
 	}
-	iscrash := CheckColl(x, y, w, h, rs)
-	if iscrash == false {
-		rs = append(rs, Room{
-			X: x,
-			Y: y,
-			W: w,
-			H: h,
-			N: ii,
-		})
+	switch CheckColl(x, y, w, h, rs) {
+	case false:
+		rs = append(rs,
+			Room{
+				X: x,
+				Y: y,
+				W: w,
+				H: h,
+				N: len(rs),
+			},
+		)
+	case true:
+		rs = MakeRoom(rs, gen)
 	}
-	return rs, ii + 1
+	return rs
 }
 
 func Room2Tiles(r *Room, ts []Tile) {
@@ -103,20 +105,10 @@ func PrintLev(l *Lev) {
 }
 
 var vflag = flag.Int("v", 18, "Random Seed")
-var cpuprof = flag.String("cpuprofile", "go.prof", "write cpu profile")
 
 func main() {
 	start := time.Now()
 	flag.Parse()
-	if *cpuprof != "" {
-		f, err := os.Create(*cpuprof)
-		if err != nil {
-			fmt.Printf("%v\n", err)
-			os.Exit(1)
-		}
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
-	}
 	var v int = *vflag
 	fmt.Printf("Random seed: %v\n", v)
 	gen := ^uint32(v)
@@ -129,18 +121,14 @@ func main() {
 	all_tiles := make([]Tile, NTILES*NLEVELS)
 
 	for i := 0; i < NLEVELS; i++ {
-		//rs := make([]Room, 0, 100)
+
 		rs := all_rooms[i*NROOMS : (i+1)*NROOMS][:0]
-		jj := len(rs)
-		for ii := 0; ii < 50000; ii++ {
-			rs, jj = MakeRoom(rs, jj, &gen)
-			if jj == 99 {
-				break
-			}
+		for ii := 0; ii < NROOMS; ii++ {
+			rs = MakeRoom(rs, &gen)
 		}
-		//ts := make([]Tile, 0, 2500)
+
 		ts := all_tiles[i*NTILES : (i+1)*NTILES][:0]
-		for ii := 0; ii < 2500; ii++ {
+		for ii := 0; ii < NTILES; ii++ {
 			ts = append(ts, Tile{X: ii % TileDim, Y: ii / TileDim, T: 0})
 		}
 		for _, r := range rs {
